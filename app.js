@@ -48,6 +48,10 @@
     var h = (CONFIG.hosts || {})[id];
     return h ? (h.name || id) : '';
   }
+  function placeOf(slot) {
+    var h = (CONFIG.hosts || {})[hostOf(slot)];
+    return (h && h.location) || meetCfg().location || '';
+  }
   // Only worth naming the host on a slot chip when the schedule has more than one.
   function manyHosts() {
     var seen = {};
@@ -393,9 +397,10 @@
     $('#segPerson').textContent = mc.inPersonLabel || 'In person';
 
     syncEmailRequirement();
+    var place = placeOf(s);
     $('#modeHint').textContent =
       'Online gets you a ' + linkWord() + '.' +
-      (mc.location ? ' In person is at ' + mc.location + '.' : '');
+      (place ? ' In person is at ' + place + '.' : '');
 
     var eff = modeOf(s);
     $('#modeWrap').hidden = (eff !== 'either');
@@ -403,7 +408,7 @@
     if (eff === 'online') {
       $('#modeFixed').textContent = modeLabel('online') + ' — your meeting link appears right after booking.';
     } else if (eff === 'inperson') {
-      $('#modeFixed').textContent = modeLabel('inperson') + (mc.location ? ' — ' + mc.location : '');
+      $('#modeFixed').textContent = modeLabel('inperson') + (place ? ' — ' + place : '');
     } else {
       document.querySelector('input[name=mode][value=online]').checked = true;
     }
@@ -422,8 +427,7 @@
     openModal('#cancelModal');
   }
 
-  function showMeetInfo(mode, meetUrl, warning) {
-    var mc = meetCfg();
+  function showMeetInfo(mode, meetUrl, warning, place) {
     $('#dMeet').hidden = true;
     $('#dPlace').hidden = true;
     $('#dWarn').hidden = true;
@@ -442,8 +446,8 @@
           : "Your booking is confirmed. The meeting link will follow by email.";
         $('#dWarn').hidden = false;
       }
-    } else if (mc.location) {
-      $('#dPlaceText').textContent = mc.location;
+    } else if (place) {
+      $('#dPlaceText').textContent = place;
       $('#dPlace').hidden = false;
     }
   }
@@ -526,8 +530,11 @@
         return;
       }
 
+      var place = placeOf(slot);
+
       apiPost({ action: 'book', slotId: slotId, end: slot.end, label: slot.label,
-                host: hostOf(slot), name: name, email: email, note: note, mode: mode })
+                host: hostOf(slot), place: place,
+                name: name, email: email, note: note, mode: mode })
         .then(function (res) {
           if (!res.ok) {
             $('#mError').textContent =
@@ -543,7 +550,7 @@
           closeModal('#modal');
           $('#dSlot').textContent = slotText(slotById(slotId));
           $('#dCode').textContent = res.cancelCode;
-          showMeetInfo(mode, res.meetUrl, res.warning);
+          showMeetInfo(mode, res.meetUrl, res.warning, place);
           openModal('#doneModal');
           return refresh();
         })

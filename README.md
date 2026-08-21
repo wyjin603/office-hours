@@ -72,7 +72,7 @@ var TIMEZONE          = 'America/New_York';  // must match `timezone` in config.
 var ADD_TO_CALENDAR   = true;
 var CREATE_MEET_LINK  = true;
 var CALENDAR_ID       = 'primary';
-var IN_PERSON_PLACE   = '';            // office/room, written to the event location
+var IN_PERSON_PLACE   = '';            // fallback office; per-host rooms live in config.js
 var NOTIFY_EMAIL      = '';            // your address, to be mailed on each booking
 var REQUIRE_EMAIL_FOR_ONLINE = true;   // online bookings must carry an email
 ```
@@ -143,7 +143,7 @@ requireEmailForOnline: true,   // and it becomes mandatory for online bookings
 
 meeting: {
   defaultMode: 'either',       // 'online' | 'inperson' | 'either' (student chooses)
-  location: 'SERC 359',        // shown to students for in-person bookings
+  location: '',                // fallback office; per-host rooms live in `hosts`
   platformName: 'Zoom',        // 'Zoom' | 'Google Meet' | '' for a neutral "meeting link"
 },
 
@@ -176,8 +176,8 @@ Adding `mode` to a block pins it to one format, and the slot is labelled accordi
 
 ```js
 hosts: {
-  alex: { name: 'Alex' },
-  sam:  { name: 'Sam'  },
+  alex: { name: 'Alex', location: 'Hall 359' },
+  sam:  { name: 'Sam',  location: 'Hall 358' },
 },
 defaultHost: 'alex',
 
@@ -193,6 +193,11 @@ as above.
 
 Once more than one host appears anywhere in the schedule, open slots show the host's name
 instead of the label, so a student knows who they are booking before they click.
+
+`location` is that person's office. It is what the booking dialog shows for an in-person slot
+and what goes into the calendar event, so two people who sit in different rooms each get their
+own. A host without one falls back to `meeting.location`. Room numbers are public information,
+so they live in `config.js` — changing one is an edit and a push, with no redeploy.
 
 ### Meeting rooms
 

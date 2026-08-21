@@ -36,9 +36,8 @@ const CONFIG = {
     // 'either'   -> the student chooses when booking
     defaultMode: 'either',
 
-    // Shown to students. Keep it in sync with IN_PERSON_PLACE in Code.gs
-    // so the calendar event carries the same location.
-    location: 'SERC 359',
+    // Fallback office for any host without their own `location` below.
+    location: '',
 
     // Shown wherever the meeting link is mentioned. Set it to whatever you
     // actually use — 'Google Meet', 'Zoom', 'Teams'. Leave empty for a neutral
@@ -55,11 +54,13 @@ const CONFIG = {
   // on a block below. Only display names live here — the actual meeting-room links
   // are set in Code.gs, so they reach only people who have actually booked and are
   // never published with the site.
+  // `location` is where this person holds in-person hours. It is shown to students
+  // and written to the calendar event, so it only needs setting here — no redeploy.
   hosts: {
-    weiyi:  { name: 'Weiyi'  },
-    zephyr: { name: 'Zephyr' },
+    weiyi:  { name: 'Weiyi',  location: 'SERC 359' },
+    zephyr: { name: 'Zephyr', location: 'SERC 358' },
     // Add the next TA here, then give them blocks below and a room in Apps Script:
-    // ta3: { name: 'Name' },
+    // ta3: { name: 'Name', location: 'SERC 3xx' },
   },
   defaultHost: 'weiyi',           // used by any block without an explicit `host`
 

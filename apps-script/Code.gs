@@ -25,7 +25,10 @@ var ADD_TO_CALENDAR   = true;      // Create a Google Calendar event per booking
 var CREATE_MEET_LINK  = true;      // Attach a Google Meet link to online bookings
 var CALENDAR_ID       = 'primary'; // 'primary' is your own default calendar
 var EVENT_TITLE       = 'Office Hour';
-var IN_PERSON_PLACE   = 'SERC 359';  // Written to the event's location field
+// Fallback office for in-person bookings. Each host normally carries their own
+// `location` in config.js and the page sends it along, so this is only used when
+// a booking arrives without one.
+var IN_PERSON_PLACE   = '';
 
 var NOTIFY_EMAIL = '';             // Your address to get a mail on every booking/cancel
 
@@ -155,6 +158,10 @@ function book_(b) {
   if (mode === 'online' && REQUIRE_EMAIL_FOR_ONLINE && !email) return { ok: false, error: 'need_email' };
 
   var host  = String(b.host || '').replace(/[^A-Za-z0-9_-]/g, '').substring(0, 24);
+  // Where an in-person meeting happens. Public information, so it travels with the
+  // request rather than being duplicated here; stripped of anything but a plain
+  // one-line string before it reaches the calendar.
+  var place = String(b.place || '').replace(/[\r\n\t]+/g, ' ').trim().substring(0, 120);
   var parts = slotId.split('_');
   var date  = parts[0], start = parts[1];
   var end   = /^\d{2}:\d{2}$/.test(String(b.end || '')) ? String(b.end)
@@ -178,7 +185,7 @@ function book_(b) {
     if (ADD_TO_CALENDAR) {
       cal = createEvent_({
         date: date, start: start, end: end, name: name, email: email,
-        note: note, mode: mode, host: host, label: String(b.label || '')
+        note: note, mode: mode, host: host, place: place, label: String(b.label || '')
       });
     }
 
@@ -275,7 +282,8 @@ function createEvent_(o) {
       end:   { dateTime: o.date + 'T' + o.end   + ':00', timeZone: TIMEZONE }
     };
 
-    if (o.mode === 'inperson' && IN_PERSON_PLACE) ev.location = IN_PERSON_PLACE;
+    var where = o.place || IN_PERSON_PLACE;
+    if (o.mode === 'inperson' && where) ev.location = where;
 
     // Invite the student and, when known, whoever is running this block, so the
     // appointment lands on the host's own calendar.
