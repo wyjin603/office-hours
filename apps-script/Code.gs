@@ -29,13 +29,77 @@ var IN_PERSON_PLACE   = 'SERC 359';  // Written to the event's location field
 
 var NOTIFY_EMAIL = '';             // Your address to get a mail on every booking/cancel
 
+// Online bookings must carry an email so the student is a real calendar guest
+// and can join the meeting without waiting to be admitted.
+var REQUIRE_EMAIL_FOR_ONLINE = true;
+
+// Permanent meeting rooms and host addresses, keyed by the host ids in config.js.
+// Whoever owns a room is the person running that office hour, so they can always
+// admit students themselves — nobody waits for the course owner to show up.
+//
+// ⚠️  DO NOT put real links here if this file lives in a public repository.
+//     This is a template; the copy in Apps Script is what actually runs.
+//     Set the real values in **Project Settings -> Script properties** instead:
+//
+//         room.<hostId>    https://…zoom.us/j/…  or  https://meet.google.com/…
+//         email.<hostId>   person@example.com
+//
+//     using the same host ids as `hosts` in config.js.
+//
+//     Script properties live in Google's project settings, never in a file, so
+//     nothing sensitive can be committed by accident. A host with no room falls
+//     back to a freshly generated Google Meet link.
+var HOST_LINKS  = {};
+var HOST_EMAILS = {};
+
 var MAX_NAME_LEN = 40;
 var MAX_NOTE_LEN = 200;
 var DEFAULT_SLOT_MINUTES = 15;
 
 var HEADERS = ['id', 'slotId', 'date', 'start', 'end', 'name', 'email', 'note',
-               'mode', 'meetUrl', 'eventId', 'cancelCode', 'status',
+               'mode', 'host', 'meetUrl', 'eventId', 'cancelCode', 'status',
                'createdAt', 'updatedAt'];
+
+/* ---------- Host rooms ---------- */
+
+// Script properties are read once per execution and cached.
+var _props = null;
+function prop_(key) {
+  if (_props === null) {
+    try { _props = PropertiesService.getScriptProperties().getProperties() || {}; }
+    catch (err) { _props = {}; }
+  }
+  return _props[key] || '';
+}
+
+function looksLikeEmail_(v) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(String(v || '').trim());
+}
+
+function hostLink_(h)  { return h ? (HOST_LINKS[h]  || prop_('room.'  + h)) : ''; }
+
+// Raw value, so setup() can point at a typo.
+function hostEmailRaw_(h) { return h ? (HOST_EMAILS[h] || prop_('email.' + h)) : ''; }
+
+// A malformed address would make the whole calendar insert fail, taking the
+// event and the meeting link with it. Better to drop it and keep the booking.
+function hostEmail_(h) {
+  var v = hostEmailRaw_(h);
+  return looksLikeEmail_(v) ? v : '';
+}
+
+// Every host id mentioned anywhere, so setup() can report on all of them.
+function knownHosts_() {
+  var ids = {};
+  Object.keys(HOST_LINKS).forEach(function (h) { ids[h] = 1; });
+  Object.keys(HOST_EMAILS).forEach(function (h) { ids[h] = 1; });
+  if (_props === null) prop_('');
+  Object.keys(_props).forEach(function (k) {
+    var m = k.match(/^(?:room|email)\.(.+)$/);
+    if (m) ids[m[1]] = 1;
+  });
+  return Object.keys(ids).sort();
+}
 
 /* ---------- Entry points ---------- */
 
@@ -77,9 +141,12 @@ function book_(b) {
 
   var note  = String(b.note || '').trim().substring(0, MAX_NOTE_LEN);
   var email = String(b.email || '').trim();
-  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email)) return { ok: false, error: 'bad_email' };
+  if (email && !looksLikeEmail_(email)) return { ok: false, error: 'bad_email' };
 
-  var mode  = (b.mode === 'inperson') ? 'inperson' : 'online';
+  var mode = (b.mode === 'inperson') ? 'inperson' : 'online';
+  if (mode === 'online' && REQUIRE_EMAIL_FOR_ONLINE && !email) return { ok: false, error: 'need_email' };
+
+  var host  = String(b.host || '').replace(/[^A-Za-z0-9_-]/g, '').substring(0, 24);
   var parts = slotId.split('_');
   var date  = parts[0], start = parts[1];
   var end   = /^\d{2}:\d{2}$/.test(String(b.end || '')) ? String(b.end)
@@ -102,8 +169,8 @@ function book_(b) {
     var cal = { eventId: '', meetUrl: '', warning: '' };
     if (ADD_TO_CALENDAR) {
       cal = createEvent_({
-        date: date, start: start, end: end, name: name,
-        email: email, note: note, mode: mode, label: String(b.label || '')
+        date: date, start: start, end: end, name: name, email: email,
+        note: note, mode: mode, host: host, label: String(b.label || '')
       });
     }
 
@@ -115,6 +182,7 @@ function book_(b) {
     set('id', Utilities.getUuid());
     set('slotId', slotId);   set('date', date);     set('start', start);  set('end', end);
     set('name', name);       set('email', email);   set('note', note);    set('mode', mode);
+    set('host', host);
     set('meetUrl', cal.meetUrl);  set('eventId', cal.eventId);
     set('cancelCode', code); set('status', 'active');
     set('createdAt', now);   set('updatedAt', now);
@@ -123,12 +191,13 @@ function book_(b) {
     notify_('New booking: ' + date + ' ' + start + ' — ' + name,
             name + ' booked ' + date + ' ' + start + '–' + end +
             '\n\nFormat: ' + (mode === 'online' ? 'Online' : 'In person') +
+            (host ? '\nHost: ' + host : '') +
             (email ? '\nEmail: ' + email : '') +
             (note ? '\nNote: ' + note : '') +
             (cal.meetUrl ? '\nMeet: ' + cal.meetUrl : '') +
             (cal.warning ? '\n\n(!) Calendar: ' + cal.warning : ''));
 
-    return { ok: true, cancelCode: code, meetUrl: cal.meetUrl, mode: mode,
+    return { ok: true, cancelCode: code, meetUrl: cal.meetUrl, mode: mode, host: host,
              warning: cal.warning ? 'no_calendar' : '' };
   } finally {
     lock.releaseLock();
@@ -199,10 +268,24 @@ function createEvent_(o) {
     };
 
     if (o.mode === 'inperson' && IN_PERSON_PLACE) ev.location = IN_PERSON_PLACE;
-    if (o.email) ev.attendees = [{ email: o.email }];
 
-    var params = { sendUpdates: o.email ? 'all' : 'none' };
-    if (o.mode === 'online' && CREATE_MEET_LINK) {
+    // Invite the student and, when known, whoever is running this block, so the
+    // appointment lands on the host's own calendar.
+    var guests = [];
+    if (o.email) guests.push({ email: o.email });
+    var hostEmail = hostEmail_(o.host);
+    if (hostEmail && hostEmail !== o.email) guests.push({ email: hostEmail });
+    if (guests.length) ev.attendees = guests;
+
+    var params = { sendUpdates: guests.length ? 'all' : 'none' };
+
+    // A host's own permanent room wins: its owner is the person actually holding
+    // the hour, so they can admit anyone. Otherwise generate a one-off Meet link.
+    var fixedRoom = (o.mode === 'online') ? hostLink_(o.host) : '';
+    if (fixedRoom) {
+      ev.location = fixedRoom;
+      ev.description += '\n\nMeeting link: ' + fixedRoom;
+    } else if (o.mode === 'online' && CREATE_MEET_LINK) {
       ev.conferenceData = {
         createRequest: {
           requestId: Utilities.getUuid(),
@@ -214,12 +297,13 @@ function createEvent_(o) {
 
     var created = Calendar.Events.insert(ev, CALENDAR_ID, params);
     out.eventId = created.id || '';
-    out.meetUrl = created.hangoutLink || '';
-    if (o.mode === 'online' && CREATE_MEET_LINK && !out.meetUrl) out.warning = 'meet link missing';
+    out.meetUrl = fixedRoom || created.hangoutLink || '';
+    if (o.mode === 'online' && !out.meetUrl) out.warning = 'no meeting link';
   } catch (err) {
-    // A calendar problem must never block the booking itself —
-    // record the reason and carry on writing the row.
+    // A calendar problem must never block the booking itself — record the reason,
+    // still hand out the host's permanent room if there is one, and write the row.
     out.warning = String(err);
+    if (o.mode === 'online') out.meetUrl = hostLink_(o.host);
   }
   return out;
 }
@@ -306,4 +390,20 @@ function setup() {
     Logger.log('    Fix: Services (+) in the left sidebar -> Google Calendar API -> Add, then run setup again.');
     Logger.log('    (' + err + ')');
   }
+
+  var hosts = knownHosts_();
+  if (!hosts.length) {
+    Logger.log('!!  No host rooms configured. Add script properties like');
+    Logger.log('    room.<hostId> and email.<hostId> under Project Settings.');
+    return;
+  }
+  Logger.log('--  Host rooms:');
+  hosts.forEach(function (h) {
+    var raw = hostEmailRaw_(h);
+    var mail = !raw                  ? 'NO EMAIL - will not reach their calendar'
+             : !looksLikeEmail_(raw) ? 'INVALID EMAIL "' + raw + '" - ignored, fix email.' + h
+             :                         'invited as ' + raw;
+    Logger.log('      ' + h + ': ' +
+      (hostLink_(h) ? 'own room ' + hostLink_(h) : 'auto-generated Meet link') + ', ' + mail);
+  });
 }

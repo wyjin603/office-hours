@@ -38,6 +38,24 @@
     return keys.length ? (m[keys[keys.length - 1]][field] || '') : '';
   }
   function meetCfg() { return CONFIG.meeting || {}; }
+  // 'Zoom link' / 'Google Meet link' / plain 'meeting link'
+  function linkWord() {
+    var p = meetCfg().platformName;
+    return p ? p + ' link' : 'meeting link';
+  }
+  function hostOf(s) { return s.host || CONFIG.defaultHost || ''; }
+  function hostName(id) {
+    var h = (CONFIG.hosts || {})[id];
+    return h ? (h.name || id) : '';
+  }
+  // Only worth naming the host on a slot chip when the schedule has more than one.
+  function manyHosts() {
+    var seen = {};
+    state.days.forEach(function (d) {
+      d.slots.forEach(function (x) { seen[hostOf(x)] = 1; });
+    });
+    return Object.keys(seen).filter(function (k) { return !!k; }).length > 1;
+  }
   function modeOf(s) { return s.mode || meetCfg().defaultMode || 'either'; }
   function modeLabel(mode) {
     var mc = meetCfg();
@@ -126,7 +144,8 @@
           start: hm,
           end: toHM(t + step),
           label: block.label || '',
-          mode: block.mode || ''      // empty = fall back to CONFIG.meeting.defaultMode
+          mode: block.mode || '',     // empty = fall back to CONFIG.meeting.defaultMode
+          host: block.host || ''      // empty = fall back to CONFIG.defaultHost
         };
       }
     }
@@ -228,6 +247,7 @@
     }
 
     var codes = myCodes();
+    var showHost = manyHosts();
 
     state.days.forEach(function (day) {
       var card = document.createElement('section');
@@ -268,7 +288,10 @@
         } else {
           btn.className = 'slot free';
           var tag = modeOf(s);
-          sub = (s.label || 'Available') + (tag === 'either' ? '' : ' · ' + modeLabel(tag));
+          var who = showHost ? hostName(hostOf(s)) : '';
+          sub = who
+            ? who + (tag === 'either' ? '' : ' · ' + modeLabel(tag))
+            : (s.label || 'Available') + (tag === 'either' ? '' : ' · ' + modeLabel(tag));
         }
 
         var t = document.createElement('span');
@@ -300,7 +323,10 @@
 
   function slotText(s) {
     var f = fmtDate(s.date);
-    return f.dow + ', ' + f.md + ' · ' + fmtRange(s.start, s.end) + (s.label ? ' · ' + s.label : '');
+    var who = hostName(hostOf(s));
+    return f.dow + ', ' + f.md + ' · ' + fmtRange(s.start, s.end) +
+           (s.label ? ' · ' + s.label : '') +
+           (who ? ' · with ' + who : '');
   }
 
   function renderMine() {
@@ -366,8 +392,9 @@
     $('#segOnline').textContent = mc.onlineLabel || 'Online';
     $('#segPerson').textContent = mc.inPersonLabel || 'In person';
 
+    syncEmailRequirement();
     $('#modeHint').textContent =
-      'Online gets you a Google Meet link.' +
+      'Online gets you a ' + linkWord() + '.' +
       (mc.location ? ' In person is at ' + mc.location + '.' : '');
 
     var eff = modeOf(s);
@@ -403,6 +430,9 @@
 
     if (mode === 'online') {
       if (meetUrl) {
+        $('#dMeetLabel').textContent =
+          linkWord().charAt(0).toUpperCase() + linkWord().slice(1) +
+          ' — it also went to your email:';
         $('#dMeetLink').textContent = meetUrl;
         $('#dMeetLink').href = meetUrl;
         $('#dMeet').hidden = false;
@@ -416,6 +446,28 @@
       $('#dPlaceText').textContent = mc.location;
       $('#dPlace').hidden = false;
     }
+  }
+
+  // Online bookings need a real email so the student is a calendar guest and can
+  // join without waiting to be admitted.
+  function pickedMode() {
+    var slot = state.pending ? slotById(state.pending) : null;
+    var eff = slot ? modeOf(slot) : 'either';
+    if (eff !== 'either') return eff;
+    var picked = document.querySelector('input[name=mode]:checked');
+    return picked ? picked.value : 'online';
+  }
+
+  function syncEmailRequirement() {
+    if (!CONFIG.askEmail) return;
+    var need = CONFIG.requireEmailForOnline && pickedMode() === 'online';
+    var input = $('#fEmail');
+    input.required = need;
+    $('#emailLabelText').textContent = need ? 'Email' : 'Email (optional)';
+    $('#emailReq').hidden = !need;
+    $('#emailHint').textContent = need
+      ? "Required for online meetings — the invite carries your meeting link and lets you join straight away."
+      : "You'll get a calendar invite with all the details.";
   }
 
   /* ---------------- Event wiring ---------------- */
@@ -446,6 +498,10 @@
 
     $('#refreshBtn').addEventListener('click', function () { refresh(true); });
 
+    document.querySelectorAll('input[name=mode]').forEach(function (r) {
+      r.addEventListener('change', syncEmailRequirement);
+    });
+
     $('#bookForm').addEventListener('submit', function (e) {
       e.preventDefault();
       var name = $('#fName').value.trim();
@@ -463,13 +519,21 @@
       var mode = (eff === 'either') ? (picked ? picked.value : 'online') : eff;
       var email = CONFIG.askEmail ? $('#fEmail').value.trim() : '';
 
+      if (mode === 'online' && CONFIG.requireEmailForOnline && !email) {
+        $('#mError').textContent = 'An email address is required for online meetings.';
+        $('#mError').hidden = false;
+        $('#fEmail').focus();
+        return;
+      }
+
       apiPost({ action: 'book', slotId: slotId, end: slot.end, label: slot.label,
-                name: name, email: email, note: note, mode: mode })
+                host: hostOf(slot), name: name, email: email, note: note, mode: mode })
         .then(function (res) {
           if (!res.ok) {
             $('#mError').textContent =
                 res.error === 'taken'     ? 'Someone just took that slot. Please pick another one.'
               : res.error === 'bad_email' ? "That email address doesn't look right."
+              : res.error === 'need_email' ? 'An email address is required for online meetings.'
               : 'Booking failed: ' + (res.error || 'unknown error');
             $('#mError').hidden = false;
             return refresh();

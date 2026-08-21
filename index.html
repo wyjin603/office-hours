@@ -68,7 +68,7 @@
       <input id="fName" name="name" type="text" maxlength="40" required autocomplete="name" placeholder="Jane Doe">
 
       <div id="emailWrap">
-        <label for="fEmail">Email (optional)</label>
+        <label for="fEmail"><span id="emailLabelText">Email (optional)</span><span id="emailReq" class="req" hidden> *</span></label>
         <input id="fEmail" name="email" type="email" maxlength="80" autocomplete="email" placeholder="you@school.edu">
         <p class="hint" id="emailHint">You'll get a calendar invite with all the details.</p>
       </div>
@@ -118,7 +118,7 @@
     <p id="dSlot" class="mslot"></p>
 
     <div id="dMeet" hidden>
-      <p class="hint">Google Meet link — it also went to your email if you gave one:</p>
+      <p class="hint" id="dMeetLabel">Meeting link — it also went to your email:</p>
       <a id="dMeetLink" class="meetlink" target="_blank" rel="noopener"></a>
     </div>
 
