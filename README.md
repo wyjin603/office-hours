@@ -252,9 +252,28 @@ to knock.
 If your Zoom account requires authenticated users, students must sign in with an institutional
 account to join. That is usually fine for a course, but worth saying on the page.
 
-Every booking also lands on the calendar the script runs as (`CALENDAR_ID`, `primary` by
-default), so the course owner sees all of them. Point `CALENDAR_ID` at a dedicated secondary
-calendar if you would rather keep them out of your main one.
+### Whose calendar, and who gets reminded
+
+Every booking is created on the calendar of the account the script runs as (`CALENDAR_ID`,
+`primary` by default) — including hours held by a TA, since that is the only calendar the
+script has permission to write to. That gives the course owner one place to see everything.
+
+Being the organiser of an event normally means getting its reminders, which would mean being
+pinged before every one of a TA's slots. Set `OWNER_HOST_ID` to your own host id and bookings
+held by anyone else are created with reminders switched off **on your copy only** — guests
+still get their own default notifications:
+
+```js
+var OWNER_HOST_ID = 'alex';   // the host id in config.js for this account
+```
+
+If you would rather those events not appear on your main calendar at all, create a secondary
+calendar and point `CALENDAR_ID` at it. You can then toggle its visibility, and it carries its
+own notification settings.
+
+A host whose address is on a different domain from the account running the script — a personal
+Google account running the site while you read mail at work, say — simply gets invited as a
+guest, and the booking lands on both calendars.
 
 ---
 

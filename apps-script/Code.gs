@@ -16,7 +16,7 @@
 // at script.google.com, paste the id from the sheet URL, the part between
 // /d/ and /edit. Keep it out of a public repo — the value only needs to
 // exist inside the Apps Script editor.
-var SPREADSHEET_ID = '';
+var SPREADSHEET_ID = '13B0Xy0XuhtQ3ZIg35GSoE1pk8dd7-dXMlaH18lpAHaE';
 
 var SHEET_NAME = 'Bookings';          // Created automatically if missing
 var TIMEZONE   = 'America/New_York';  // Must match `timezone` in config.js
@@ -28,6 +28,14 @@ var EVENT_TITLE       = 'Office Hour';
 var IN_PERSON_PLACE   = 'SERC 359';  // Written to the event's location field
 
 var NOTIFY_EMAIL = '';             // Your address to get a mail on every booking/cancel
+
+// Which host id in config.js is the account this script runs as.
+// Every booking lands on this calendar, including a TA's, so you keep an
+// overview — but you should not be pinged before an hour you are not attending.
+// Bookings held by anyone else are therefore created with reminders switched
+// off *on your copy only*. Guests keep their own default notifications.
+// Leave empty to get reminders for everything.
+var OWNER_HOST_ID = 'weiyi';
 
 // Online bookings must carry an email so the student is a real calendar guest
 // and can join the meeting without waiting to be admitted.
@@ -277,6 +285,12 @@ function createEvent_(o) {
     if (hostEmail && hostEmail !== o.email) guests.push({ email: hostEmail });
     if (guests.length) ev.attendees = guests;
 
+    // Reminders set at insert time apply to the organiser's copy of the event.
+    // Each guest keeps whatever defaults their own calendar has.
+    if (OWNER_HOST_ID && o.host && o.host !== OWNER_HOST_ID) {
+      ev.reminders = { useDefault: false, overrides: [] };
+    }
+
     var params = { sendUpdates: guests.length ? 'all' : 'none' };
 
     // A host's own permanent room wins: its owner is the person actually holding
@@ -397,6 +411,10 @@ function setup() {
     Logger.log('    room.<hostId> and email.<hostId> under Project Settings.');
     return;
   }
+  Logger.log('--  Reminders: ' + (OWNER_HOST_ID
+    ? 'only for bookings held by "' + OWNER_HOST_ID + '"'
+    : 'on for every booking (set OWNER_HOST_ID to change)'));
+
   Logger.log('--  Host rooms:');
   hosts.forEach(function (h) {
     var raw = hostEmailRaw_(h);
