@@ -1,28 +1,33 @@
 /* =============================================================
- *  Office Hour 预约 —— Google Apps Script 后端
+ *  Office hours booking — Google Apps Script backend
  *
- *  需要启用「Google Calendar API」高级服务才能自动生成 Meet 链接：
- *  左侧「服务 / Services」旁边的 ➕ → 选 Google Calendar API → 添加。
- *  加完后先手动运行一次 setup()，它会告诉你有没有配好。
+ *  Google Meet links need the advanced Calendar service:
+ *  Services (+) in the left sidebar -> Google Calendar API -> Add.
+ *  Then run setup() once; it reports whether everything is wired up.
+ *
+ *  Remember: editing this file does nothing until you redeploy
+ *  (Deploy -> Manage deployments -> pencil -> Version: New version).
  * ============================================================= */
 
-/* ---------- 配置 ---------- */
+/* ---------- Settings ---------- */
 
-// 从表格的「扩展程序 → Apps Script」打开的 → 留空
-// 从 script.google.com 单独建的项目 → 填表格网址里 /d/ 和 /edit 之间那串 ID
-// 填了 ID 就别把这份文件推到公开仓库（脚本本来只需要活在 Apps Script 里）
+// Leave empty if this script was opened from the sheet's Extensions menu
+// (it is then bound to that spreadsheet). For a standalone project created
+// at script.google.com, paste the id from the sheet URL, the part between
+// /d/ and /edit. Keep it out of a public repo — the value only needs to
+// exist inside the Apps Script editor.
 var SPREADSHEET_ID = '';
 
-var SHEET_NAME = 'Bookings';       // 数据写到哪个工作表（不存在会自动建）
-var TIMEZONE   = 'America/New_York';  // ⚠️ 必须和 config.js 里的 timezone 一致
+var SHEET_NAME = 'Bookings';          // Created automatically if missing
+var TIMEZONE   = 'America/New_York';  // Must match `timezone` in config.js
 
-var ADD_TO_CALENDAR   = true;      // 每个预约在你的 Google 日历上建一个日程
-var CREATE_MEET_LINK  = true;      // 线上预约自动生成 Google Meet 链接
-var CALENDAR_ID       = 'primary'; // 写进哪个日历，'primary' = 你的主日历
+var ADD_TO_CALENDAR   = true;      // Create a Google Calendar event per booking
+var CREATE_MEET_LINK  = true;      // Attach a Google Meet link to online bookings
+var CALENDAR_ID       = 'primary'; // 'primary' is your own default calendar
 var EVENT_TITLE       = 'Office Hour';
-var IN_PERSON_PLACE   = 'SERC 359';  // 线下地点，会写进日程的 location
+var IN_PERSON_PLACE   = 'SERC 359';  // Written to the event's location field
 
-var NOTIFY_EMAIL = '';             // 填你的邮箱 = 每次预约/取消都给你发信；留空则不发
+var NOTIFY_EMAIL = '';             // Your address to get a mail on every booking/cancel
 
 var MAX_NAME_LEN = 40;
 var MAX_NOTE_LEN = 200;
@@ -32,7 +37,7 @@ var HEADERS = ['id', 'slotId', 'date', 'start', 'end', 'name', 'email', 'note',
                'mode', 'meetUrl', 'eventId', 'cancelCode', 'status',
                'createdAt', 'updatedAt'];
 
-/* ---------- 入口 ---------- */
+/* ---------- Entry points ---------- */
 
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || 'list';
@@ -60,7 +65,7 @@ function doPost(e) {
   }
 }
 
-/* ---------- 业务 ---------- */
+/* ---------- Actions ---------- */
 
 function book_(b) {
   var slotId = String(b.slotId || '');
@@ -87,7 +92,7 @@ function book_(b) {
     var sh = getSheet_(), m = headerMap_(sh);
     var rows = sh.getDataRange().getValues();
 
-    // 每格只能 1 个人
+    // One person per slot
     for (var i = 1; i < rows.length; i++) {
       if (String(rows[i][m.slotId]) === slotId && String(rows[i][m.status]) === 'active') {
         return { ok: false, error: 'taken' };
@@ -164,7 +169,8 @@ function cancel_(b) {
   }
 }
 
-// 只返回公开需要的字段：姓名 + 形式。备注、邮箱、取消码、Meet 链接绝不外泄。
+// Public payload is deliberately minimal: name and format only.
+// Notes, emails, cancellation codes and Meet links are never exposed.
 function listActive_() {
   var sh = getSheet_(), m = headerMap_(sh);
   var rows = sh.getDataRange().getValues();
@@ -179,7 +185,7 @@ function listActive_() {
   return out;
 }
 
-/* ---------- 日历 / Meet ---------- */
+/* ---------- Calendar / Meet ---------- */
 
 function createEvent_(o) {
   var out = { eventId: '', meetUrl: '', warning: '' };
@@ -211,7 +217,8 @@ function createEvent_(o) {
     out.meetUrl = created.hangoutLink || '';
     if (o.mode === 'online' && CREATE_MEET_LINK && !out.meetUrl) out.warning = 'meet link missing';
   } catch (err) {
-    // 日历没配好也不能挡住预约本身 —— 记下来，照常写表
+    // A calendar problem must never block the booking itself —
+    // record the reason and carry on writing the row.
     out.warning = String(err);
   }
   return out;
@@ -221,25 +228,25 @@ function deleteEvent_(eventId) {
   if (!eventId || !ADD_TO_CALENDAR) return;
   try {
     Calendar.Events.remove(CALENDAR_ID, eventId, { sendUpdates: 'all' });
-  } catch (err) { /* 日程已经被手动删了之类的，忽略 */ }
+  } catch (err) { /* already deleted by hand, or gone — nothing to do */ }
 }
 
-/* ---------- 工具 ---------- */
+/* ---------- Helpers ---------- */
 
 function getSheet_() {
   var ss = SPREADSHEET_ID
     ? SpreadsheetApp.openById(SPREADSHEET_ID)
     : SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) throw new Error('找不到表格：请填 SPREADSHEET_ID，或从表格的「扩展程序 → Apps Script」打开脚本。');
+  if (!ss) throw new Error('No spreadsheet found. Set SPREADSHEET_ID, or open this script from the sheet via Extensions > Apps Script.');
 
   var sh = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
 
   if (sh.getLastRow() === 0) {
     sh.appendRow(HEADERS);
-    sh.getRange('B:E').setNumberFormat('@');   // 日期/时间按纯文本存，别被转成日期
-    sh.getRange('L:L').setNumberFormat('@');   // 取消码
+    sh.getRange('B:E').setNumberFormat('@');   // keep dates/times as text, not coerced values
+    sh.getRange('L:L').setNumberFormat('@');   // cancellation codes
   } else {
-    // 老表格升级：只在末尾补上缺的列，已有数据一行不动
+    // Migration: append only the columns that are missing, leaving existing rows untouched
     var cur = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]
                 .map(function (x) { return String(x); });
     var missing = HEADERS.filter(function (h) { return cur.indexOf(h) === -1; });
@@ -251,7 +258,8 @@ function getSheet_() {
   return sh;
 }
 
-// 表头名 → 列下标（0 起）。用名字取值，以后加列也不会错位。
+// Header name -> zero-based column index. Reading by name keeps the code
+// correct even after columns are added.
 function headerMap_(sh) {
   var row = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
   var m = {};
@@ -266,7 +274,7 @@ function addMinutes_(hm, mins) {
 }
 
 function makeCode_() {
-  var chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';  // 去掉容易看混的 0/O/1/I
+  var chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';  // 0/O and 1/I omitted on purpose
   var s = '';
   for (var i = 0; i < 6; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
   return s;
@@ -274,7 +282,7 @@ function makeCode_() {
 
 function notify_(subject, body) {
   if (!NOTIFY_EMAIL) return;
-  try { MailApp.sendEmail(NOTIFY_EMAIL, subject, body); } catch (e) { /* 配额用完就算了 */ }
+  try { MailApp.sendEmail(NOTIFY_EMAIL, subject, body); } catch (e) { /* out of quota — not worth failing over */ }
 }
 
 function json_(obj) {
@@ -283,19 +291,19 @@ function json_(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-/* ---------- 一次性自检：在编辑器里手动运行，看「执行日志」 ---------- */
+/* ---------- Run this by hand in the editor and read the execution log ---------- */
 function setup() {
   var sh = getSheet_();
-  Logger.log('✅ 表格 OK：工作表 "' + SHEET_NAME + '" in "' + sh.getParent().getName() + '"');
+  Logger.log('OK  Sheet ready: "' + SHEET_NAME + '" in "' + sh.getParent().getName() + '"');
 
-  if (!ADD_TO_CALENDAR) { Logger.log('ℹ️ ADD_TO_CALENDAR = false，不建日程。'); return; }
+  if (!ADD_TO_CALENDAR) { Logger.log('--  ADD_TO_CALENDAR is false, no events will be created.'); return; }
   try {
     var cal = Calendar.Calendars.get(CALENDAR_ID);
-    Logger.log('✅ 日历 OK：' + cal.summary + '（时区 ' + cal.timeZone + '）');
-    Logger.log('   Meet 链接生成：' + (CREATE_MEET_LINK ? '开' : '关'));
+    Logger.log('OK  Calendar ready: ' + cal.summary + ' (' + cal.timeZone + ')');
+    Logger.log('    Meet links: ' + (CREATE_MEET_LINK ? 'on' : 'off'));
   } catch (err) {
-    Logger.log('❌ Calendar 高级服务没启用 —— 线上预约不会有 Meet 链接。');
-    Logger.log('   修复：左侧「服务 / Services」旁的 ➕ → Google Calendar API → 添加，然后重跑 setup。');
-    Logger.log('   (' + err + ')');
+    Logger.log('!!  Calendar advanced service is not enabled - online bookings get no Meet link.');
+    Logger.log('    Fix: Services (+) in the left sidebar -> Google Calendar API -> Add, then run setup again.');
+    Logger.log('    (' + err + ')');
   }
 }

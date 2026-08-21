@@ -1,6 +1,6 @@
 /* =============================================================
- *  前端逻辑 —— 一般不用改这个文件，改 config.js 就行
- *  All user-facing strings live in this file and config.js.
+ *  Front-end logic. You normally don't need to touch this file —
+ *  everything configurable lives in config.js.
  * ============================================================= */
 (function () {
   'use strict';
@@ -12,14 +12,14 @@
   var LS_DEMO = 'ohb.demo.v1';
 
   var state = {
-    loaded: false,  // 第一次拿到后端数据之前，格子先禁用，免得误点
-    bookings: {},   // slotId -> { name, note }
+    loaded: false,  // slots stay disabled until the first fetch lands, to prevent mis-clicks
+    bookings: {},   // slotId -> { name, mode }
     days: [],       // [{ date, slots: [...] }]
     pending: null,
     timer: null
   };
 
-  /* ---------------- 本地存的取消码 ---------------- */
+  /* ---------------- Cancellation codes kept in localStorage ---------------- */
   function myCodes() {
     try { return JSON.parse(localStorage.getItem(LS_CODES)) || {}; } catch (e) { return {}; }
   }
@@ -45,7 +45,7 @@
          : mode === 'inperson' ? (mc.inPersonLabel || 'In person') : '';
   }
 
-  /* ---------------- 时间工具 ---------------- */
+  /* ---------------- Time helpers ---------------- */
   function toMin(t) { var p = t.split(':'); return (+p[0]) * 60 + (+p[1]); }
   function toHM(n) {
     return String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
@@ -57,7 +57,7 @@
   function ymd(d) { return d.toISOString().slice(0, 10); }
   function addDays(d, n) { return new Date(d.getTime() + n * 86400000); }
 
-  // 当前时间（按配置时区）→ { date: 'YYYY-MM-DD', time: 'HH:MM' }
+  // Current time in the configured zone -> { date: 'YYYY-MM-DD', time: 'HH:MM' }
   function nowInTZ() {
     var opts = {
       year: 'numeric', month: '2-digit', day: '2-digit',
@@ -67,7 +67,7 @@
     var parts;
     try {
       parts = new Intl.DateTimeFormat('en-CA', opts).formatToParts(new Date());
-    } catch (e) {                       // 时区名字写错时退回本地时间
+    } catch (e) {                       // Fall back to local time if the zone name is invalid
       delete opts.timeZone;
       parts = new Intl.DateTimeFormat('en-CA', opts).formatToParts(new Date());
     }
@@ -87,7 +87,7 @@
     } catch (e) { return 'Times shown in your local time zone'; }
   }
 
-  // '14:05' -> '2:05 PM'（或原样返回 24 小时制）
+  // '14:05' -> '2:05 PM' (or unchanged when use12Hour is false)
   function fmtTime(hm, withMeridiem) {
     if (!CONFIG.use12Hour) return hm;
     var m = toMin(hm), h = Math.floor(m / 60), mm = m % 60;
@@ -97,14 +97,14 @@
   }
   function meridiem(hm) { return toMin(hm) < 720 ? 'AM' : 'PM'; }
 
-  // 一段时间 -> '2:00 – 2:15 PM'（同上下午时只写一次 AM/PM）
+  // A range -> '2:00 - 2:15 PM' (the meridiem is printed once when both halves match)
   function fmtRange(start, end) {
     if (!CONFIG.use12Hour) return start + '–' + end;
     var same = meridiem(start) === meridiem(end);
     return fmtTime(start, !same) + ' – ' + fmtTime(end, true);
   }
 
-  /* ---------------- 根据配置生成时段 ---------------- */
+  /* ---------------- Build the slot grid from CONFIG ---------------- */
   function buildDays() {
     var now = nowInTZ();
     var today = parseYMD(now.date);
@@ -119,14 +119,14 @@
       if (!map[dateStr]) map[dateStr] = {};
       for (var t = toMin(block.start); t + step <= end; t += step) {
         var hm = toHM(t);
-        if (map[dateStr][hm]) continue;               // 时段重叠时去重
+        if (map[dateStr][hm]) continue;               // de-dupe overlapping blocks
         map[dateStr][hm] = {
           id: dateStr + '_' + hm,
           date: dateStr,
           start: hm,
           end: toHM(t + step),
           label: block.label || '',
-          mode: block.mode || ''      // 空 = 用 CONFIG.meeting.defaultMode
+          mode: block.mode || ''      // empty = fall back to CONFIG.meeting.defaultMode
         };
       }
     }
@@ -137,7 +137,7 @@
       }
     });
 
-    // 手动指定的日期：只要还没过去就显示，不受 daysAhead 限制
+    // One-off dates show as long as they haven't passed, ignoring daysAhead
     (CONFIG.extraDates || []).forEach(function (b) {
       if (b.date >= now.date) addBlock(b.date, b);
     });
@@ -151,13 +151,13 @@
         s.closed = (date === now.date) && (toMin(s.start) < nowMin + lead);
         return s;
       }).filter(function (s) {
-        return !(date === now.date && toMin(s.start) < nowMin);   // 已开始的不显示
+        return !(date === now.date && toMin(s.start) < nowMin);   // hide slots already under way
       });
       return { date: date, slots: slots };
     }).filter(function (d) { return d.slots.length > 0; });
   }
 
-  /* ---------------- 与后端通信 ---------------- */
+  /* ---------------- Backend calls ---------------- */
   function demoStore() {
     try { return JSON.parse(localStorage.getItem(LS_DEMO)) || {}; } catch (e) { return {}; }
   }
@@ -196,7 +196,7 @@
       }
       return Promise.resolve({ ok: false, error: 'unknown' });
     }
-    // 用 text/plain 发 POST，避开 CORS 预检（Apps Script 不支持预检）
+    // POST as text/plain to avoid a CORS preflight — Apps Script can't answer OPTIONS
     return fetch(CONFIG.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -205,7 +205,7 @@
     }).then(function (r) { return r.json(); });
   }
 
-  /* ---------------- 渲染 ---------------- */
+  /* ---------------- Rendering ---------------- */
   function fmtDate(dateStr) {
     var d = parseYMD(dateStr);
     var sameYear = dateStr.slice(0, 4) === nowInTZ().date.slice(0, 4);
@@ -347,7 +347,7 @@
     el.textContent = msg;
   }
 
-  /* ---------------- 弹窗 ---------------- */
+  /* ---------------- Dialogs ---------------- */
   function openModal(sel) { $(sel).hidden = false; }
   function closeModal(sel) { $(sel).hidden = true; }
 
@@ -418,7 +418,7 @@
     }
   }
 
-  /* ---------------- 事件 ---------------- */
+  /* ---------------- Event wiring ---------------- */
   function wire() {
     $('#days').addEventListener('click', function (e) {
       var btn = e.target.closest('button[data-slot]');
@@ -526,11 +526,11 @@
     });
   }
 
-  /* ---------------- 刷新 ---------------- */
+  /* ---------------- Refresh ---------------- */
   function refresh(showSpinner) {
     setStatus(state.loaded ? (showSpinner ? 'Refreshing…' : '') : 'Loading availability…');
     state.days = buildDays();
-    render();                      // 先把课表画出来，不让用户盯着 Loading
+    render();                      // paint the schedule immediately instead of a bare spinner
     return apiList().then(function (res) {
       if (res && res.ok) {
         state.loaded = true;
@@ -550,7 +550,7 @@
     });
   }
 
-  /* ---------------- 启动 ---------------- */
+  /* ---------------- Boot ---------------- */
   function init() {
     document.title = CONFIG.title;
     $('#pageTitle').textContent = CONFIG.title;
