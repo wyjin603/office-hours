@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Office Hours Booking</title>
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗓️</text></svg>">
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="head">
+    <h1 id="pageTitle">Office Hours Booking</h1>
+    <p id="pageSubtitle" class="sub"></p>
+    <div class="meta">
+      <span id="tzNote" class="pill"></span>
+      <button id="refreshBtn" class="ghost" type="button">Refresh</button>
+      <span id="status" class="status"></span>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <section id="mine" class="mine" hidden>
+    <h2>My bookings</h2>
+    <ul id="mineList"></ul>
+  </section>
+
+  <main id="days" class="days" aria-live="polite">
+    <p class="empty">Loading…</p>
+  </main>
+
+  <footer class="foot">
+    <p id="footerNote"></p>
+  </footer>
+
+</div>
+
+<!-- Booking dialog -->
+<div id="modal" class="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h2 id="mTitle">Book this slot</h2>
+    <p id="mSlot" class="mslot"></p>
+
+    <form id="bookForm">
+      <label for="fName">Your name <span class="req">*</span></label>
+      <input id="fName" name="name" type="text" maxlength="40" required autocomplete="name" placeholder="Jane Doe">
+
+      <div id="noteWrap">
+        <label for="fNote">What would you like to discuss? (optional)</label>
+        <input id="fNote" name="note" type="text" maxlength="200" placeholder="e.g. Problem set Q3, lab setup">
+      </div>
+
+      <p id="mError" class="err" hidden></p>
+
+      <div class="actions">
+        <button type="button" class="ghost" data-close>Never mind</button>
+        <button type="submit" class="primary" id="mSubmit">Book slot</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Cancellation dialog -->
+<div id="cancelModal" class="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cTitle">
+    <h2 id="cTitle">Cancel this booking</h2>
+    <p id="cSlot" class="mslot"></p>
+
+    <form id="cancelForm">
+      <div id="codeWrap" hidden>
+        <label for="fCode">Cancellation code</label>
+        <input id="fCode" name="code" type="text" maxlength="12" placeholder="6-character code from your booking">
+        <p class="hint">You only need this if you booked from a different browser or device.</p>
+      </div>
+
+      <p id="cError" class="err" hidden></p>
+
+      <div class="actions">
+        <button type="button" class="ghost" data-close>Keep it</button>
+        <button type="submit" class="danger" id="cSubmit">Cancel booking</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Confirmation, shows the cancellation code -->
+<div id="doneModal" class="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <h2 id="dTitle">✅ You're booked</h2>
+    <p id="dSlot" class="mslot"></p>
+    <p class="hint">Cancellation code — save a screenshot, you'll need it to cancel from another device:</p>
+    <p id="dCode" class="code"></p>
+    <div class="actions">
+      <button type="button" class="primary" data-close>Got it</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
