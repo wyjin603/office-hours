@@ -87,37 +87,87 @@ apiUrl: 'https://script.google.com/macros/s/AKfycb..../exec',
 
 ---
 
-## 三、设置你的时段（改 `config.js`）
+## 三、开启 Google Meet 自动生成（线上 office hour 用）
+
+学生选「Online」预约时，后端会在**你的 Google 日历**上建一个日程、自动生成一条 Meet 链接，
+当场显示给学生；学生填了邮箱的话还会收到日历邀请。学生取消时，日程自动删除。
+
+这需要在 Apps Script 里多启用一个服务：
+
+1. 编辑器左侧 **「服务 / Services」** 旁边的 **➕**
+2. 列表里选 **Google Calendar API** → **添加**（标识符保持默认的 `Calendar`）
+3. 保存，然后运行一次 **`setup`**，看「执行日志」：
+
+```
+✅ 表格 OK：工作表 "Bookings" in "Office Hour Appointment"
+✅ 日历 OK：<你的日历名>（时区 America/New_York）
+   Meet 链接生成：开
+```
+
+两行都是 ✅ 才算配好。如果第二行是 ❌，说明 Calendar 服务没加上 —— 这种情况**预约照样能成功**，
+只是没有 Meet 链接（代码里做了兜底，不会因为日历没配好就挡住学生预约）。
+
+4. 最后 **重新部署**（Deploy → 管理部署 → 铅笔 → 版本选「新版本」→ 部署）。
+
+`Code.gs` 顶部这几个开关可以调：
+
+```js
+var TIMEZONE          = 'America/New_York';  // ⚠️ 必须和 config.js 的 timezone 一致
+var ADD_TO_CALENDAR   = true;   // 每个预约都在你日历上建日程（线下的也建，方便你看）
+var CREATE_MEET_LINK  = true;   // 线上预约生成 Meet 链接
+var CALENDAR_ID       = 'primary';
+var EVENT_TITLE       = 'Office Hour';
+var IN_PERSON_PLACE   = '';     // 线下地点，写进日程的 location
+```
+
+> **为什么不是 Zoom**：Zoom 要每次生成新会议的话，得在 Zoom Marketplace 建一个
+> Server-to-Server OAuth app 拿凭证，学校账号通常需要 IT 批准。Google Meet 这条路
+> Apps Script 原生支持，零额外凭证。如果你就是想用 Zoom，最省事的办法是把你的
+> 个人会议室（PMI）链接固定写在 `config.js` 的 `footerNote` 里。
+
+---
+
+## 四、设置你的时段（改 `config.js`）
 
 ```js
 title: 'Office Hours & Lab Booking',   // 页面大标题
 timezone: 'America/New_York',          // 时区
-use12Hour: true,                       // true → 2:00 – 2:15 PM；false → 14:00–14:15
+use12Hour: true,                       // true → 4:00 – 4:15 PM；false → 16:00–16:15
 daysAhead: 21,                         // 往后开放三周
 minLeadMinutes: 60,                    // 开始前 1 小时截止预约
 showNames: true,                       // 是否公开显示预约人姓名
+askEmail: true,                        // 填了邮箱 → 学生收到带 Meet 链接的日历邀请
+
+meeting: {
+  defaultMode: 'either',               // 'online' 全线上 | 'inperson' 全线下 | 'either' 学生自己选
+  location: 'Wachman Hall 1015',       // 线下地点，显示给学生
+},
 
 // 每周固定的（0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat）
 // 时间一律写 24 小时制，显示时自动转 12 小时
+// 加 mode 可以把某个时段钉死成线上或线下
 recurring: [
-  { weekday: 2, start: '14:00', end: '16:00', label: 'Office Hour' },
-  { weekday: 4, start: '10:00', end: '11:30', label: 'Office Hour' },
+  { weekday: 2, start: '16:00', end: '18:00', label: 'Office Hour' },
+  { weekday: 4, start: '16:00', end: '18:00', label: 'Office Hour', mode: 'inperson' },
 ],
 
 // 临时加的具体日期，比如实验
 extraDates: [
-  { date: '2026-09-10', start: '09:00', end: '12:00', label: 'Lab Session' },
+  { date: '2026-09-10', start: '09:00', end: '12:00', label: 'Lab Session', mode: 'inperson' },
 ],
 
 // 放假/出差，整天关闭
 blackoutDates: ['2026-11-26'],
 ```
 
+`defaultMode: 'either'` 时，学生在预约弹窗里自己选 Online 还是 In person；
+给某个 `recurring` / `extraDates` 加上 `mode`，那个时段就固定成一种，格子上会直接标出来。
+
 一段连续时间会自动切成 15 分钟的小格。`label` 显示在空格子上，所以**区分 Office Hour 和实验就靠它**。
 
 ---
 
-## 四、发布到 GitHub Pages
+## 五、发布到 GitHub Pages
 
 ```bash
 git init -b main && git add -A && git commit -m "Office hours booking site"
@@ -140,22 +190,26 @@ https://你的用户名.github.io/office-hours/
 
 ---
 
-## 五、日常使用
+## 六、日常使用
 
 - **看谁约了什么**：直接看 Google 表格的 `Bookings` 工作表。`status = active` 的才算数，
   `cancelled` 是已取消的记录（留痕，不占位）。
 - **帮学生取消**：把那行的 `status` 从 `active` 改成 `cancelled`，学生页面刷新后格子就空出来了。
 - **手动加一条预约**：补一行，`slotId` 写成 `2026-09-10_09:00` 这种格式，`status` 写 `active`。
 - **学生换设备要取消**：让他输入预约时拿到的 6 位取消码；或者你直接在表里改。
+- **Meet 链接在哪**：表格 `meetUrl` 列，同时也在你 Google 日历对应的日程里。
+- **你在表里手动改 `status` 不会删日历日程** —— 需要的话去日历里手动删。走网页取消才会自动删。
 
 ---
 
-## 六、隐私 & 注意事项
+## 七、隐私 & 注意事项
 
 - **表格别开公开共享**。学生姓名存在里面，右上角 Share → General access 设成 **Restricted**（仅限特定人员）。
   学生通过网页提交时走的是 Apps Script（以你的身份写入），他们本来就不需要表格权限。
 - **别把 `SPREADSHEET_ID` 推到公开仓库**。脚本本来只需要活在 Apps Script 里，仓库里这份留空就行。
 - 页面默认显示已预约学生的姓名。不想显示就把 `showNames` 改成 `false`，格子只显示 `Booked`。
+- **公开接口只返回姓名和线上/线下**。备注、邮箱、取消码、Meet 链接都不会出现在公开数据里 ——
+  Meet 链接只在预约成功那一刻给到本人，之后存在他自己浏览器里。
 - Apps Script 免费额度对一门课完全够用（每天几万次请求、100 封邮件）。
 - 取消码存在浏览器 `localStorage`，清了浏览器数据就要手动输码。
 

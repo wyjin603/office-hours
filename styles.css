@@ -169,3 +169,44 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .wrap { padding: 20px 13px 48px; }
   .slots { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
+
+/* ---------- 线上/线下切换 ---------- */
+.segmented { display: flex; gap: 8px; }
+.seg {
+  flex: 1; margin: 0 !important; display: flex; align-items: center; gap: 7px;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px;
+  cursor: pointer; font-weight: 500 !important; font-size: 13.5px !important;
+  background: var(--bg); transition: .12s ease;
+}
+.seg:hover { border-color: var(--accent); }
+.seg input { accent-color: var(--accent); margin: 0; }
+.seg:has(input:checked) { border-color: var(--accent); background: var(--accent-weak); color: var(--accent); }
+.fixedmode {
+  margin: 12px 0 0; padding: 9px 11px; border-radius: 9px;
+  background: var(--accent-weak); color: var(--accent);
+  font-size: 13px; font-weight: 600;
+}
+
+/* ---------- 会议链接 / 地点 ---------- */
+.meetlink {
+  display: block; word-break: break-all; margin: 4px 0 14px;
+  padding: 11px; border-radius: 9px;
+  background: var(--accent-weak); color: var(--accent);
+  font: 600 13.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-decoration: none;
+}
+.meetlink:hover { text-decoration: underline; }
+.place {
+  margin: 4px 0 14px; padding: 11px; border-radius: 9px;
+  background: var(--taken); font-weight: 600; font-size: 14px;
+}
+.warn { color: #a06400; font-size: 12.5px; margin: 0 0 12px; }
+@media (prefers-color-scheme: dark) { .warn { color: #e8c56a; } }
+
+.mine li { flex-wrap: wrap; }
+.mine li > span { flex: 1 1 0; min-width: 0; }
+.mine .mlink {
+  flex-basis: 100%; font: 500 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--accent); word-break: break-all; text-decoration: none;
+}
+.mine .mlink:hover { text-decoration: underline; }

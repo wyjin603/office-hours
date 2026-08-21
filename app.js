@@ -23,9 +23,9 @@
   function myCodes() {
     try { return JSON.parse(localStorage.getItem(LS_CODES)) || {}; } catch (e) { return {}; }
   }
-  function saveCode(slotId, code, name) {
+  function saveCode(slotId, rec) {
     var m = myCodes();
-    m[slotId] = { code: code, name: name };
+    m[slotId] = rec;
     localStorage.setItem(LS_CODES, JSON.stringify(m));
   }
   function dropCode(slotId) {
@@ -33,9 +33,16 @@
     delete m[slotId];
     localStorage.setItem(LS_CODES, JSON.stringify(m));
   }
-  function lastName() {
+  function lastOf(field) {
     var m = myCodes(), keys = Object.keys(m);
-    return keys.length ? (m[keys[keys.length - 1]].name || '') : '';
+    return keys.length ? (m[keys[keys.length - 1]][field] || '') : '';
+  }
+  function meetCfg() { return CONFIG.meeting || {}; }
+  function modeOf(s) { return s.mode || meetCfg().defaultMode || 'either'; }
+  function modeLabel(mode) {
+    var mc = meetCfg();
+    return mode === 'online' ? (mc.onlineLabel || 'Online')
+         : mode === 'inperson' ? (mc.inPersonLabel || 'In person') : '';
   }
 
   /* ---------------- 时间工具 ---------------- */
@@ -118,7 +125,8 @@
           date: dateStr,
           start: hm,
           end: toHM(t + step),
-          label: block.label || ''
+          label: block.label || '',
+          mode: block.mode || ''      // 空 = 用 CONFIG.meeting.defaultMode
         };
       }
     }
@@ -171,9 +179,12 @@
       if (body.action === 'book') {
         if (db[body.slotId]) return Promise.resolve({ ok: false, error: 'taken' });
         var code = String(Math.floor(100000 + Math.random() * 900000));
-        db[body.slotId] = { name: body.name, note: body.note || '', code: code };
+        var fakeMeet = body.mode === 'online'
+          ? 'https://meet.google.com/demo-' + code.slice(0, 4) + '-xyz' : '';
+        db[body.slotId] = { name: body.name, note: body.note || '',
+                            mode: body.mode || '', code: code, meetUrl: fakeMeet };
         demoSave(db);
-        return Promise.resolve({ ok: true, cancelCode: code });
+        return Promise.resolve({ ok: true, cancelCode: code, meetUrl: fakeMeet });
       }
       if (body.action === 'cancel') {
         var row = db[body.slotId];
@@ -255,7 +266,9 @@
         } else if (s.closed) {
           btn.className = 'slot closed'; btn.disabled = true; sub = 'Closed';
         } else {
-          btn.className = 'slot free'; sub = s.label || 'Available';
+          btn.className = 'slot free';
+          var tag = modeOf(s);
+          sub = (s.label || 'Available') + (tag === 'either' ? '' : ' · ' + modeLabel(tag));
         }
 
         var t = document.createElement('span');
@@ -298,9 +311,11 @@
     box.hidden = false;
     list.innerHTML = '';
     ids.forEach(function (id) {
+      var rec = codes[id];
       var li = document.createElement('li');
       var span = document.createElement('span');
-      span.textContent = slotText(slotById(id));
+      span.textContent = slotText(slotById(id)) +
+                         (rec.mode ? ' · ' + modeLabel(rec.mode) : '');
       var btn = document.createElement('button');
       btn.className = 'ghost';
       btn.type = 'button';
@@ -308,6 +323,16 @@
       btn.dataset.cancel = id;
       li.appendChild(span);
       li.appendChild(btn);
+
+      if (rec.meetUrl) {
+        var a = document.createElement('a');
+        a.className = 'mlink';
+        a.href = rec.meetUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = rec.meetUrl;
+        li.appendChild(a);
+      }
       list.appendChild(li);
     });
   }
@@ -328,11 +353,34 @@
 
   function openBook(slotId) {
     state.pending = slotId;
-    $('#mSlot').textContent = slotText(slotById(slotId));
+    var s = slotById(slotId);
+    var mc = meetCfg();
+
+    $('#mSlot').textContent = slotText(s);
     $('#mError').hidden = true;
-    $('#fName').value = lastName();
+    $('#fName').value = lastOf('name');
+    $('#fEmail').value = lastOf('email');
     $('#fNote').value = '';
     $('#noteWrap').hidden = !CONFIG.askNote;
+    $('#emailWrap').hidden = !CONFIG.askEmail;
+    $('#segOnline').textContent = mc.onlineLabel || 'Online';
+    $('#segPerson').textContent = mc.inPersonLabel || 'In person';
+
+    $('#modeHint').textContent =
+      'Online gets you a Google Meet link.' +
+      (mc.location ? ' In person is at ' + mc.location + '.' : '');
+
+    var eff = modeOf(s);
+    $('#modeWrap').hidden = (eff !== 'either');
+    $('#modeFixed').hidden = (eff === 'either');
+    if (eff === 'online') {
+      $('#modeFixed').textContent = modeLabel('online') + ' — your meeting link appears right after booking.';
+    } else if (eff === 'inperson') {
+      $('#modeFixed').textContent = modeLabel('inperson') + (mc.location ? ' — ' + mc.location : '');
+    } else {
+      document.querySelector('input[name=mode][value=online]').checked = true;
+    }
+
     openModal('#modal');
     setTimeout(function () { $('#fName').focus(); }, 30);
   }
@@ -345,6 +393,29 @@
     $('#codeWrap').hidden = !!known;
     $('#fCode').value = '';
     openModal('#cancelModal');
+  }
+
+  function showMeetInfo(mode, meetUrl, warning) {
+    var mc = meetCfg();
+    $('#dMeet').hidden = true;
+    $('#dPlace').hidden = true;
+    $('#dWarn').hidden = true;
+
+    if (mode === 'online') {
+      if (meetUrl) {
+        $('#dMeetLink').textContent = meetUrl;
+        $('#dMeetLink').href = meetUrl;
+        $('#dMeet').hidden = false;
+      } else {
+        $('#dWarn').textContent = warning === 'no_calendar'
+          ? "Your booking is confirmed, but the meeting link couldn't be created. Contact me for the link."
+          : "Your booking is confirmed. The meeting link will follow by email.";
+        $('#dWarn').hidden = false;
+      }
+    } else if (mc.location) {
+      $('#dPlaceText').textContent = mc.location;
+      $('#dPlace').hidden = false;
+    }
   }
 
   /* ---------------- 事件 ---------------- */
@@ -386,19 +457,29 @@
       $('#mError').hidden = true;
 
       var slotId = state.pending;
-      apiPost({ action: 'book', slotId: slotId, name: name, note: note })
+      var slot = slotById(slotId);
+      var eff = modeOf(slot);
+      var picked = document.querySelector('input[name=mode]:checked');
+      var mode = (eff === 'either') ? (picked ? picked.value : 'online') : eff;
+      var email = CONFIG.askEmail ? $('#fEmail').value.trim() : '';
+
+      apiPost({ action: 'book', slotId: slotId, end: slot.end, label: slot.label,
+                name: name, email: email, note: note, mode: mode })
         .then(function (res) {
           if (!res.ok) {
-            $('#mError').textContent = res.error === 'taken'
-              ? 'Someone just took that slot. Please pick another one.'
+            $('#mError').textContent =
+                res.error === 'taken'     ? 'Someone just took that slot. Please pick another one.'
+              : res.error === 'bad_email' ? "That email address doesn't look right."
               : 'Booking failed: ' + (res.error || 'unknown error');
             $('#mError').hidden = false;
             return refresh();
           }
-          saveCode(slotId, res.cancelCode, name);
+          saveCode(slotId, { code: res.cancelCode, name: name, email: email,
+                             mode: mode, meetUrl: res.meetUrl || '' });
           closeModal('#modal');
           $('#dSlot').textContent = slotText(slotById(slotId));
           $('#dCode').textContent = res.cancelCode;
+          showMeetInfo(mode, res.meetUrl, res.warning);
           openModal('#doneModal');
           return refresh();
         })

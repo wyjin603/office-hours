@@ -46,8 +46,32 @@
     <p id="mSlot" class="mslot"></p>
 
     <form id="bookForm">
+
+      <div id="modeWrap">
+        <label>How would you like to meet?</label>
+        <div class="segmented">
+          <label class="seg">
+            <input type="radio" name="mode" value="online" checked>
+            <span id="segOnline">Online</span>
+          </label>
+          <label class="seg">
+            <input type="radio" name="mode" value="inperson">
+            <span id="segPerson">In person</span>
+          </label>
+        </div>
+        <p class="hint" id="modeHint"></p>
+      </div>
+
+      <p id="modeFixed" class="fixedmode" hidden></p>
+
       <label for="fName">Your name <span class="req">*</span></label>
       <input id="fName" name="name" type="text" maxlength="40" required autocomplete="name" placeholder="Jane Doe">
+
+      <div id="emailWrap">
+        <label for="fEmail">Email (optional)</label>
+        <input id="fEmail" name="email" type="email" maxlength="80" autocomplete="email" placeholder="you@temple.edu">
+        <p class="hint" id="emailHint">You'll get a calendar invite with all the details.</p>
+      </div>
 
       <div id="noteWrap">
         <label for="fNote">What would you like to discuss? (optional)</label>
@@ -87,13 +111,27 @@
   </div>
 </div>
 
-<!-- Confirmation, shows the cancellation code -->
+<!-- Confirmation -->
 <div id="doneModal" class="modal" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dTitle">
     <h2 id="dTitle">✅ You're booked</h2>
     <p id="dSlot" class="mslot"></p>
+
+    <div id="dMeet" hidden>
+      <p class="hint">Google Meet link — it also went to your email if you gave one:</p>
+      <a id="dMeetLink" class="meetlink" target="_blank" rel="noopener"></a>
+    </div>
+
+    <div id="dPlace" hidden>
+      <p class="hint">Where to go:</p>
+      <p id="dPlaceText" class="place"></p>
+    </div>
+
+    <p id="dWarn" class="warn" hidden></p>
+
     <p class="hint">Cancellation code — save a screenshot, you'll need it to cancel from another device:</p>
     <p id="dCode" class="code"></p>
+
     <div class="actions">
       <button type="button" class="primary" data-close>Got it</button>
     </div>
