@@ -59,8 +59,9 @@ const CONFIG = {
   hosts: {
     weiyi:  { name: 'Weiyi',  location: 'SERC 359' },
     zephyr: { name: 'Zephyr', location: 'SERC 358' },
-    // Add the next TA here, then give them blocks below and a room in Apps Script:
-    // ta3: { name: 'Name', location: 'SERC 3xx' },
+    seth:   { name: 'Seth',   location: 'SERC 358' },
+    // To add someone: a line here, blocks below, and room.<id> / email.<id>
+    // as script properties in Apps Script.
   },
   defaultHost: 'weiyi',           // used by any block without an explicit `host`
 
@@ -78,6 +79,9 @@ const CONFIG = {
     { weekday: 1, start: '11:00', end: '13:00', label: 'Office Hour', host: 'zephyr' }, // Mon 11 AM - 1 PM
     { weekday: 2, start: '16:00', end: '18:00', label: 'Office Hour', host: 'weiyi'  }, // Tue 4 - 6 PM
     { weekday: 4, start: '16:00', end: '18:00', label: 'Office Hour', host: 'weiyi'  }, // Thu 4 - 6 PM
+
+    { weekday: 1, start: '13:30', end: '14:30', label: 'Office Hour', host: 'seth' }, // Mon 1:30 - 2:30 PM
+    { weekday: 5, start: '13:30', end: '14:30', label: 'Office Hour', host: 'seth' }, // Fri 1:30 - 2:30 PM
   ],
 
   /* ---------- 7. One-off dates (lab sessions, make-up hours) ---------- */
