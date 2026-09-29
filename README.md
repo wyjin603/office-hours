@@ -1,10 +1,10 @@
 # Office Hours & Lab Booking
 
 A static booking page hosted on **GitHub Pages**. A student opens the URL, clicks an open
-15-minute slot, types their name, and submits. Bookings are written to **your own Google
+slot, types their name, and submits. Bookings are written to **your own Google
 Sheet**, which you can read and export at any time. Students need no account of any kind.
 
-- One person per 15-minute slot. Once taken, the slot shows `Booked · <name>` and is not clickable.
+- One person per slot (`slotMinutes`). Once taken, the slot shows `Booked · <name>` and is not clickable.
 - Every booking returns a 6-character cancellation code so students can cancel themselves.
   On the same device the code is remembered, so cancelling is one click.
 - Slots come from **weekly recurring blocks** plus **one-off dates** (lab sessions, make-up hours).
@@ -162,7 +162,7 @@ extraDates: [
 blackoutDates: ['2026-11-26'],   // closed all day
 ```
 
-A continuous block is sliced into 15-minute slots automatically. `label` is what appears on
+A continuous block is sliced into `slotMinutes`-long slots automatically. `label` is what appears on
 an open slot, so it is how you distinguish office hours from lab sessions.
 
 With `defaultMode: 'either'` the student picks Online or In person in the booking dialog.

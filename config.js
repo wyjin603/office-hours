@@ -13,13 +13,13 @@ const CONFIG = {
 
   /* ---------- 2. Page copy ---------- */
   title: 'Office Hours & Lab Booking',
-  subtitle: 'Pick an open slot and enter your name. Each slot is 15 minutes and holds one person.',
+  subtitle: 'Pick an open slot and enter your name. Each slot is 10 minutes and holds one person.',
   footerNote: 'Questions? Send me an email.',
 
   /* ---------- 3. Rules ---------- */
-  slotMinutes: 15,              // Length of each slot, in minutes
+  slotMinutes: 10,              // Length of each slot, in minutes
   timezone: 'America/New_York', // Must match TIMEZONE in Code.gs
-  use12Hour: true,              // true -> 4:00 - 4:15 PM;  false -> 16:00-16:15
+  use12Hour: true,              // true -> 3:00 - 3:10 PM;  false -> 15:00-15:10
   daysAhead: 21,                // How far ahead recurring slots are opened
   minLeadMinutes: 60,           // Booking closes this many minutes before a slot (0 = no cutoff)
   showNames: true,              // Show the booker's name on taken slots
@@ -77,8 +77,8 @@ const CONFIG = {
   // 16:00-17:00 and hand 17:00-18:00 to someone else.
   recurring: [
     { weekday: 1, start: '11:00', end: '13:00', label: 'Office Hour', host: 'zephyr' }, // Mon 11 AM - 1 PM
-    { weekday: 2, start: '16:00', end: '18:00', label: 'Office Hour', host: 'weiyi'  }, // Tue 4 - 6 PM
-    { weekday: 4, start: '16:00', end: '18:00', label: 'Office Hour', host: 'weiyi'  }, // Thu 4 - 6 PM
+    { weekday: 2, start: '15:00', end: '17:00', label: 'Office Hour', host: 'weiyi', mode: 'inperson' }, // Tue 3 - 5 PM, office only
+    { weekday: 4, start: '15:00', end: '17:00', label: 'Office Hour', host: 'weiyi', mode: 'online'   }, // Thu 3 - 5 PM, online only
 
     { weekday: 1, start: '13:30', end: '14:30', label: 'Office Hour', host: 'seth' }, // Mon 1:30 - 2:30 PM
     { weekday: 5, start: '13:30', end: '14:30', label: 'Office Hour', host: 'seth' }, // Fri 1:30 - 2:30 PM
@@ -92,6 +92,12 @@ const CONFIG = {
 
   /* ---------- 8. Days to close entirely (holidays, travel) ---------- */
   blackoutDates: [
-    // '2026-11-26',
+    // Transition to the new schedule. Bookings already made for these two days
+    // were placed under the old 4-6 PM / 15-minute layout, so those days are
+    // closed to new bookings rather than re-cut into the new grid. Everyone who
+    // already booked keeps their calendar invite and meeting link. Safe to
+    // delete both lines once 1 Oct has passed.
+    '2026-09-29',
+    '2026-10-01',
   ],
 };
