@@ -21,6 +21,9 @@ const CONFIG = {
   timezone: 'America/New_York', // Must match TIMEZONE in Code.gs
   use12Hour: true,              // true -> 3:00 - 3:10 PM;  false -> 15:00-15:10
   daysAhead: 21,                // How far ahead recurring slots are opened
+  lastDate: '2026-12-04',       // Last day of the semester. No recurring slots are generated
+                                // after this date, whatever daysAhead says. Set to '' to lift
+                                // the limit. One-off entries in extraDates are not affected.
   minLeadMinutes: 60,           // Booking closes this many minutes before a slot (0 = no cutoff)
   showNames: true,              // Show the booker's name on taken slots
   askNote: true,                // Ask "what would you like to discuss?"
@@ -92,12 +95,11 @@ const CONFIG = {
 
   /* ---------- 8. Days to close entirely (holidays, travel) ---------- */
   blackoutDates: [
-    // Transition to the new schedule. Bookings already made for these two days
-    // were placed under the old 4-6 PM / 15-minute layout, so those days are
-    // closed to new bookings rather than re-cut into the new grid. Everyone who
-    // already booked keeps their calendar invite and meeting link. Safe to
-    // delete both lines once 1 Oct has passed.
-    '2026-09-29',
-    '2026-10-01',
+    // Fall break - no office hours all week
+    '2026-11-23',
+    '2026-11-24',
+    '2026-11-25',
+    '2026-11-26',
+    '2026-11-27',
   ],
 };

@@ -154,9 +154,14 @@
       }
     }
 
+    // Recurring blocks stop at lastDate, so the schedule doesn't roll past the
+    // end of term as daysAhead keeps sliding forward.
+    var lastDate = CONFIG.lastDate || '';
     (CONFIG.recurring || []).forEach(function (b) {
       for (var d = today; d <= horizon; d = addDays(d, 1)) {
-        if (d.getUTCDay() === b.weekday) addBlock(ymd(d), b);
+        var ds = ymd(d);
+        if (lastDate && ds > lastDate) break;
+        if (d.getUTCDay() === b.weekday) addBlock(ds, b);
       }
     });
 
